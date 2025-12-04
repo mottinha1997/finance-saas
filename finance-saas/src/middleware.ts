@@ -1,20 +1,27 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// Protegendo APENAS a rota settings e a raiz por enquanto
+// Define as rotas que queremos proteger
 const isProtectedRoute = createRouteMatcher([
   '/',
   '/settings(.*)'
 ]);
 
-export default clerkMiddleware((auth, req) => {
+export default clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {
-    auth().protect();
+    // 1. Aguardamos a autenticação resolver (async/await)
+    const { userId, redirectToSignIn } = await auth();
+
+    // 2. Se não tiver ID de usuário, redirecionamos para login manualmente
+    // Isso evita o erro de tipagem no método .protect()
+    if (!userId) {
+      return redirectToSignIn();
+    }
   }
 });
 
 export const config = {
   matcher: [
-    // Matcher padrão do Clerk que evita bloquear arquivos estáticos
+    // Matcher padrão para não bloquear arquivos estáticos
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
     '/(api|trpc)(.*)',
   ],
