@@ -1,19 +1,22 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// Define quais rotas são protegidas
+// Protege a raiz e qualquer rota dentro de /settings
 const isProtectedRoute = createRouteMatcher([
-  '/', 
-  '/settings(.*)' 
+  '/',
+  '/settings(.*)'
 ]);
 
-// Note o 'async' aqui antes dos parâmetros
-export default clerkMiddleware(async (auth, req) => {
-  // Se for rota protegida, esperamos a autenticação resolver com 'await'
+export default clerkMiddleware((auth, req) => {
   if (isProtectedRoute(req)) {
-    await auth.protect();
+    auth().protect();
   }
 });
 
 export const config = {
-  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
+  // Omatcher abaixo ignora arquivos estáticos (_next, imagens, etc)
+  // Isso evita que o Clerk bloqueie o carregamento do próprio site
+  matcher: [
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/(api|trpc)(.*)',
+  ],
 };
