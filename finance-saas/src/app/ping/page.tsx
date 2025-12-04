@@ -1,0 +1,1 @@
+export default function Page() { return <h1>PONG - O site está vivo</h1> }
