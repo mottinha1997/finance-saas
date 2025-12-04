@@ -3,7 +3,7 @@ import { SignUp } from "@clerk/nextjs";
 export default function Page() {
   return (
     <div className="flex h-screen w-full items-center justify-center bg-gray-100">
-      <SignUp path="/sign-up" />
+      <SignUp /> {/* Removemos path="/sign-up" */}
     </div>
   );
 }
