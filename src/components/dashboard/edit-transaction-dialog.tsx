@@ -80,8 +80,6 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
       return;
     }
 
-    setIsSubmitting(true)
-
     try {
       const formData = new FormData(e.currentTarget)
 
@@ -95,6 +93,32 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
       });
 
       /**
+       * VALIDAÇÃO MANUAL: Verifica campos obrigatórios
+       * A validação HTML5 required não funciona corretamente com Select customizado no Vercel
+       */
+      const description = formData.get('description') as string;
+      const amount = formData.get('amount') as string;
+      const category = formData.get('category') as string;
+
+      if (!description || !description.trim()) {
+        alert('Por favor, preencha a descrição da transação.');
+        return;
+      }
+
+      if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+        alert('Por favor, insira um valor válido maior que zero.');
+        return;
+      }
+
+      if (!category || !category.trim()) {
+        alert('Por favor, selecione uma categoria.');
+        return;
+      }
+
+      // Só ativa isSubmitting DEPOIS de todas as validações passarem
+      setIsSubmitting(true)
+
+      /**
        * FIX IMPORTANTE: Garantia extra para o checkbox
        * Mesma lógica do AddTransactionDialog
        */
@@ -104,7 +128,7 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
         formData.delete('isFixed');
       }
 
-      console.log('[EDIT DIALOG] Chamando updateTransaction...');
+      console.log('[EDIT DIALOG] Validações OK. Chamando updateTransaction...');
       // Envia atualização para Server Action
       await updateTransaction(formData);
 
@@ -205,7 +229,6 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
               <Select
                 name="category"
                 defaultValue={transaction.category || ""}
-                required
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -228,7 +251,6 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
               name="description"
               defaultValue={transaction.description}
               className="col-span-3"
-              required
             />
           </div>
 
@@ -245,7 +267,6 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
               step="0.01"
               defaultValue={Number(transaction.amount)}
               className="col-span-3"
-              required
             />
           </div>
 

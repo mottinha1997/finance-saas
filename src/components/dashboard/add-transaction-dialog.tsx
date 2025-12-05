@@ -60,11 +60,35 @@ export function AddTransactionDialog() {
     // PROTEÇÃO: Se já está enviando, ignora novo clique
     if (isSubmitting) return
 
-    setIsSubmitting(true)
-
     try {
       // Extrai dados do formulário
       const formData = new FormData(e.currentTarget)
+
+      /**
+       * VALIDAÇÃO MANUAL: Verifica campos obrigatórios
+       * A validação HTML5 required não funciona corretamente com Select customizado no Vercel
+       */
+      const description = formData.get('description') as string;
+      const amount = formData.get('amount') as string;
+      const category = formData.get('category') as string;
+
+      if (!category || !category.trim()) {
+        alert('Por favor, selecione uma categoria.');
+        return;
+      }
+
+      if (!description || !description.trim()) {
+        alert('Por favor, preencha a descrição da transação.');
+        return;
+      }
+
+      if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+        alert('Por favor, insira um valor válido maior que zero.');
+        return;
+      }
+
+      // Só ativa isSubmitting DEPOIS de todas as validações passarem
+      setIsSubmitting(true)
 
       /**
        * FIX IMPORTANTE: Garantia extra para o checkbox
@@ -183,7 +207,7 @@ export function AddTransactionDialog() {
           <div className="grid grid-cols-4 items-center gap-4">
             <Label className="text-right">Tag</Label>
             <div className="col-span-3">
-              <Select name="category" required>
+              <Select name="category">
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
                   {categoriesToShow.map(cat => (
@@ -204,7 +228,6 @@ export function AddTransactionDialog() {
               name="description"
               placeholder="Ex: Cliente X"
               className="col-span-3"
-              required
             />
           </div>
 
@@ -220,7 +243,6 @@ export function AddTransactionDialog() {
               step="0.01"
               placeholder="0.00"
               className="col-span-3"
-              required
             />
           </div>
 
