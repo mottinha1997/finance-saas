@@ -18,6 +18,13 @@
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { auth, currentUser } from "@clerk/nextjs/server"
+import {
+  validateTransactionData,
+  validateId,
+  createDuplicateKey,
+  isDuplicateTransaction,
+  recordTransaction
+} from "@/lib/validation"
 
 /**
  * ====================================================================
@@ -65,54 +72,109 @@ async function getAuthenticatedUser() {
  * Cria uma nova transação (receita ou despesa) no banco de dados
  * 
  * @param formData - Dados do formulário com campos: description, amount, category, type, isFixed
- * @throws Error se campos obrigatórios estiverem faltando
- * 
- * Campos obrigatórios:
- * - description: Descrição da transação
- * - amount: Valor (número decimal)
- * - category: Categoria da transação
- * - type: INCOME ou EXPENSE
- * 
- * Campos opcionais:
- * - isFixed: Se é despesa fixa (apenas para EXPENSE)
+ * @returns { success, error } - Resultado da operação
  */
 export async function createTransaction(formData: FormData) {
-  // Valida usuário autenticado
-  const user = await getAuthenticatedUser();
+  try {
+    console.log('[CREATE] Iniciando validação e criação de transação...');
 
-  // Extrai dados do formulário
-  const description = formData.get("description") as string
-  const amount = parseFloat(formData.get("amount") as string)
-  const category = formData.get("category") as string
-  const type = formData.get("type") as "INCOME" | "EXPENSE"
+    // ============================================================
+    // ETAPA 1: Autenticação
+    // ============================================================
+    const user = await getAuthenticatedUser();
+    console.log('[CREATE] Usuário autenticado:', user.idString);
 
-  /**
-   * Tratamento especial para checkbox
-   * Checkbox HTML envia "on" quando marcado, ou nada quando desmarcado
-   */
-  const rawFixed = formData.get("isFixed");
-  const isFixed = rawFixed === "on" || rawFixed === "true";
+    // ============================================================
+    // ETAPA 2: Extração de Dados Brutos
+    // ============================================================
+    const description = formData.get("description") as string;
+    const amountRaw = formData.get("amount") as string;
+    const category = formData.get("category") as string;
+    const type = formData.get("type") as "INCOME" | "EXPENSE";
+    const rawFixed = formData.get("isFixed");
 
-  // Validação de campos obrigatórios
-  if (!description || !amount || !category || !type) {
-    throw new Error("Campos obrigatórios faltando")
-  }
+    console.log('[CREATE] Dados recebidos:', { description, amountRaw, category, type, rawFixed });
 
-  // Cria transação no banco
-  await prisma.transaction.create({
-    data: {
-      userId: user.idString,
+    // Converte amount para number
+    const amount = parseFloat(amountRaw);
+
+    // Converte isFixed para boolean
+    const isFixed = rawFixed === "on" || rawFixed === "true";
+
+    // ============================================================
+    // ETAPA 3: Validação Robusta
+    // ============================================================
+    const validation = validateTransactionData({
       description,
       amount,
       category,
       type,
-      isFixed,
-      date: new Date(), // Data/hora atual
-    },
-  })
+      isFixed
+    });
 
-  // Revalida cache da página dashboard para mostrar nova transação
-  revalidatePath("/")
+    if (!validation.success) {
+      console.error('[CREATE] Validação falhou:', validation.error);
+      return {
+        success: false,
+        error: validation.error
+      };
+    }
+
+    const sanitizedData = validation.sanitizedData!;
+    console.log('[CREATE] Validação OK. Dados sanitizados:', sanitizedData);
+
+    // ============================================================
+    // ETAPA 4: Verificação de Duplicata
+    // ============================================================
+    const duplicateKey = createDuplicateKey(
+      user.idString,
+      sanitizedData.description,
+      sanitizedData.amount,
+      sanitizedData.type
+    );
+
+    if (isDuplicateTransaction(duplicateKey)) {
+      console.warn('[CREATE] Transação duplicada detectada:', duplicateKey);
+      return {
+        success: false,
+        error: 'Transação duplicada detectada. Aguarde alguns segundos antes de tentar novamente.'
+      };
+    }
+
+    // ============================================================
+    // ETAPA 5: Criação no Banco de Dados
+    // ============================================================
+    await prisma.transaction.create({
+      data: {
+        userId: user.idString,
+        description: sanitizedData.description,
+        amount: sanitizedData.amount,
+        category: sanitizedData.category,
+        type: sanitizedData.type,
+        isFixed: sanitizedData.isFixed,
+        date: new Date(),
+      },
+    });
+
+    // Registra transação como criada (previne duplicatas imediatas)
+    recordTransaction(duplicateKey);
+
+    console.log('[CREATE] Transação criada com sucesso!');
+
+    // Revalida cache da página
+    revalidatePath("/");
+
+    return {
+      success: true
+    };
+
+  } catch (error) {
+    console.error('[CREATE] Erro inesperado:', error);
+    return {
+      success: false,
+      error: 'Erro ao criar transação. Tente novamente.'
+    };
+  }
 }
 
 /**
@@ -123,54 +185,121 @@ export async function createTransaction(formData: FormData) {
  * Valida que a transação pertence ao usuário autenticado
  * 
  * @param formData - Dados do formulário incluindo id da transação
- * @throws Error se dados inválidos ou transação não encontrada
+ * @returns { success, error } - Resultado da operação
  */
 export async function updateTransaction(formData: FormData) {
-  console.log('[UPDATE] Iniciando atualização de transação...');
+  try {
+    console.log('[UPDATE] Iniciando atualização de transação...');
 
-  // Valida usuário autenticado
-  const user = await getAuthenticatedUser();
-  console.log('[UPDATE] Usuário autenticado:', user.idString);
+    // ============================================================
+    // ETAPA 1: Autenticação
+    // ============================================================
+    const user = await getAuthenticatedUser();
+    console.log('[UPDATE] Usuário autenticado:', user.idString);
 
-  // Extrai dados do formulário
-  const id = formData.get("id") as string;
-  const description = formData.get("description") as string;
-  const amount = parseFloat(formData.get("amount") as string);
-  const category = formData.get("category") as string;
-  const type = formData.get("type") as "INCOME" | "EXPENSE";
+    // ============================================================
+    // ETAPA 2: Extração de Dados Brutos
+    // ============================================================
+    const id = formData.get("id") as string;
+    const description = formData.get("description") as string;
+    const amountRaw = formData.get("amount") as string;
+    const category = formData.get("category") as string;
+    const type = formData.get("type") as "INCOME" | "EXPENSE";
+    const rawFixed = formData.get("isFixed");
 
-  // Tratamento especial para checkbox
-  const rawFixed = formData.get("isFixed");
-  const isFixed = rawFixed === "on" || rawFixed === "true";
+    console.log('[UPDATE] Dados recebidos:', { id, description, category, type, rawFixed });
 
-  console.log('[UPDATE] Dados recebidos:', { id, description, amount, category, type, isFixed, rawFixed });
+    const amount = parseFloat(amountRaw);
+    const isFixed = rawFixed === "on" || rawFixed === "true";
 
-  // Validação de campos obrigatórios
-  if (!id || !description || !amount || !category || !type) {
-    throw new Error("Dados inválidos");
-  }
+    // ============================================================
+    // ETAPA 3: Validação de ID
+    // ============================================================
+    const idValidation = validateId(id);
+    if (!idValidation.success) {
+      console.error('[UPDATE] ID inválido:', idValidation.error);
+      return {
+        success: false,
+        error: idValidation.error
+      };
+    }
 
-  /**
-   * Usa updateMany ao invés de update para garantir que apenas
-   * transações do usuário autenticado sejam atualizadas
-   * Previne que usuário A atualize transação de usuário B
-   */
-  await prisma.transaction.updateMany({
-    where: {
-      id,
-      userId: user.idString // Proteção de segurança
-    },
-    data: {
+    // ============================================================
+    // ETAPA 4: Validação de Dados
+    // ============================================================
+    const validation = validateTransactionData({
       description,
       amount,
       category,
       type,
-      isFixed: isFixed as any,
-    },
-  });
+      isFixed
+    });
 
-  // Revalida cache para exibir dados atualizados
-  revalidatePath("/");
+    if (!validation.success) {
+      console.error('[UPDATE] Validação falhou:', validation.error);
+      return {
+        success: false,
+        error: validation.error
+      };
+    }
+
+    const sanitizedData = validation.sanitizedData!;
+    console.log('[UPDATE] Validação OK. Dados sanitizados:', sanitizedData);
+
+    // ============================================================
+    // ETAPA 5: Verificação de Duplicata
+    // ============================================================
+    const duplicateKey = createDuplicateKey(
+      user.idString,
+      sanitizedData.description,
+      sanitizedData.amount,
+      sanitizedData.type
+    );
+
+    if (isDuplicateTransaction(duplicateKey)) {
+      console.warn('[UPDATE] Transação duplicada detectada:', duplicateKey);
+      return {
+        success: false,
+        error: 'Modificação duplicada detectada. Aguarde alguns segundos.'
+      };
+    }
+
+    // ============================================================
+    // ETAPA 6: Atualização no Banco
+    // ============================================================
+    const result = await prisma.transaction.updateMany({
+      where: {
+        id,
+        userId: user.idString // Proteção de segurança
+      },
+      data: {
+        description: sanitizedData.description,
+        amount: sanitizedData.amount,
+        category: sanitizedData.category,
+        type: sanitizedData.type,
+        isFixed: sanitizedData.isFixed,
+      },
+    });
+
+    // Registra como processado
+    recordTransaction(duplicateKey);
+
+    console.log('[UPDATE] Transação atualizada com sucesso! Registros afetados:', result.count);
+
+    // Revalida cache
+    revalidatePath("/");
+
+    return {
+      success: true
+    };
+
+  } catch (error) {
+    console.error('[UPDATE] Erro inesperado:', error);
+    return {
+      success: false,
+      error: 'Erro ao atualizar transação. Tente novamente.'
+    };
+  }
 }
 
 /**
@@ -181,28 +310,50 @@ export async function updateTransaction(formData: FormData) {
  * Valida que a transação pertence ao usuário autenticado
  * 
  * @param id - ID da transação a ser deletada
- * 
- * Segurança:
- * - Usa deleteMany com filtro de userId
- * - Garante que usuário só possa deletar suas próprias transações
+ * @returns { success, error, count } - Resultado da operação
  */
 export async function deleteTransaction(id: string) {
-  console.log('[DELETE] Iniciando exclusão de transação:', id);
+  try {
+    console.log('[DELETE] Iniciando exclusão de transação:', id);
 
-  // Valida usuário autenticado
-  const user = await getAuthenticatedUser();
+    // Valida ID
+    const idValidation = validateId(id);
+    if (!idValidation.success) {
+      console.error('[DELETE] ID inválido:', idValidation.error);
+      return {
+        success: false,
+        error: idValidation.error,
+        count: 0
+      };
+    }
 
-  /**
-   * Usa deleteMany ao invés de delete para segurança
-   * Se a transação não pertencer ao usuário, nada será deletado
-   */
-  await prisma.transaction.deleteMany({
-    where: {
-      id: id,
-      userId: user.idString // Proteção de segurança
-    },
-  });
+    // Autenticação
+    const user = await getAuthenticatedUser();
 
-  // Revalida cache para remover transação da visualização
-  revalidatePath("/");
+    // Deleta do banco
+    const result = await prisma.transaction.deleteMany({
+      where: {
+        id: id,
+        userId: user.idString // Proteção de segurança
+      },
+    });
+
+    console.log('[DELETE] Transação deletada. Registros afetados:', result.count);
+
+    // Revalida cache
+    revalidatePath("/");
+
+    return {
+      success: true,
+      count: result.count
+    };
+
+  } catch (error) {
+    console.error('[DELETE] Erro inesperado:', error);
+    return {
+      success: false,
+      error: 'Erro ao deletar transação. Tente novamente.',
+      count: 0
+    };
+  }
 }

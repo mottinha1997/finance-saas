@@ -104,12 +104,23 @@ export function AddTransactionDialog() {
       }
 
       // Envia para Server Action
-      await createTransaction(formData)
+      const result = await createTransaction(formData);
+
+      // Verifica se Server Action retornou erro
+      if (!result.success) {
+        console.error('[ADD DIALOG] Erro do servidor:', result.error);
+        alert(result.error || 'Erro ao criar transação.');
+        return;
+      }
 
       // Reseta o formulário após sucesso
-      setOpen(false)
-      setIsFixed(false)
-      setType("EXPENSE")
+      setOpen(false);
+      setIsFixed(false);
+      setType("EXPENSE");
+
+    } catch (error) {
+      console.error('[ADD DIALOG] Erro inesperado:', error);
+      alert('Erro inesperado ao criar transação.');
     } finally {
       // IMPORTANTE: Sempre reseta isSubmitting, mesmo se houver erro
       setIsSubmitting(false)

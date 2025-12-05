@@ -132,15 +132,24 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
       }
 
       console.log('[EDIT DIALOG] Validações OK. Chamando updateTransaction...');
+
       // Envia atualização para Server Action
-      await updateTransaction(formData);
+      const result = await updateTransaction(formData);
+
+      // Verifica se Server Action retornou erro
+      if (!result.success) {
+        console.error('[EDIT DIALOG] Erro do servidor:', result.error);
+        alert(result.error || 'Erro ao atualizar transação.');
+        return;
+      }
 
       console.log('[EDIT DIALOG] Atualização concluída com sucesso!');
+
       // Fecha o diálogo após sucesso
       onOpenChange(false);
     } catch (error) {
-      console.error('[EDIT DIALOG] Erro ao atualizar transação:', error);
-      alert('Erro ao atualizar transação. Verifique o console para mais detalhes.');
+      console.error('[EDIT DIALOG] Erro inesperado:', error);
+      alert('Erro inesperado ao atualizar transação.');
     } finally {
       // IMPORTANTE: Sempre reseta isSubmitting
       setIsSubmitting(false)
