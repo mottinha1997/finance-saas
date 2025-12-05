@@ -71,7 +71,10 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
    * @param e - Evento do formulário
    */
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    // CRÍTICO: Previne submissão padrão do formulário HTML
     e.preventDefault()
+    e.stopPropagation()
+
     console.log('[EDIT DIALOG] Iniciando submit do formulário...');
 
     // PROTEÇÃO: Se já está enviando, ignora novo clique
@@ -167,7 +170,7 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
           <DialogTitle>Editar Transação</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+        <form onSubmit={handleSubmit} className="grid gap-4 py-4" noValidate>
 
           {/* 
             Campo hidden com ID da transação

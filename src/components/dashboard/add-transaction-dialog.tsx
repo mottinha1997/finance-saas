@@ -55,7 +55,9 @@ export function AddTransactionDialog() {
    * @param e - Evento do formulário
    */
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    // CRÍTICO: Previne submissão padrão do formulário HTML
     e.preventDefault()
+    e.stopPropagation()
 
     // PROTEÇÃO: Se já está enviando, ignora novo clique
     if (isSubmitting) return
@@ -154,7 +156,7 @@ export function AddTransactionDialog() {
           <DialogDescription>Cadastre entradas ou saídas.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+        <form onSubmit={handleSubmit} className="grid gap-4 py-4" noValidate>
 
           {/* ============================================================
               CAMPO 1: TIPO DE TRANSAÇÃO
