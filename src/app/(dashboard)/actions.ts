@@ -126,8 +126,11 @@ export async function createTransaction(formData: FormData) {
  * @throws Error se dados inválidos ou transação não encontrada
  */
 export async function updateTransaction(formData: FormData) {
+  console.log('[UPDATE] Iniciando atualização de transação...');
+
   // Valida usuário autenticado
   const user = await getAuthenticatedUser();
+  console.log('[UPDATE] Usuário autenticado:', user.idString);
 
   // Extrai dados do formulário
   const id = formData.get("id") as string;
@@ -139,6 +142,8 @@ export async function updateTransaction(formData: FormData) {
   // Tratamento especial para checkbox
   const rawFixed = formData.get("isFixed");
   const isFixed = rawFixed === "on" || rawFixed === "true";
+
+  console.log('[UPDATE] Dados recebidos:', { id, description, amount, category, type, isFixed, rawFixed });
 
   // Validação de campos obrigatórios
   if (!id || !description || !amount || !category || !type) {
@@ -182,6 +187,8 @@ export async function updateTransaction(formData: FormData) {
  * - Garante que usuário só possa deletar suas próprias transações
  */
 export async function deleteTransaction(id: string) {
+  console.log('[DELETE] Iniciando exclusão de transação:', id);
+
   // Valida usuário autenticado
   const user = await getAuthenticatedUser();
 

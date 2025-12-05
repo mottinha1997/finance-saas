@@ -56,9 +56,20 @@ export function TransactionActions({ transaction }: TransactionActionsProps) {
    * Chama Server Action para deletar do banco
    */
   async function handleDelete() {
+    console.log('[TRANSACTION ACTIONS] Botão delete clicado');
+
     // Confirmação nativa do navegador
     if (confirm("Tem certeza que deseja excluir essa transação?")) {
-      await deleteTransaction(transaction.id);
+      console.log('[TRANSACTION ACTIONS] Confirmação aceita, deletando transação:', transaction.id);
+      try {
+        await deleteTransaction(transaction.id);
+        console.log('[TRANSACTION ACTIONS] Transação deletada com sucesso!');
+      } catch (error) {
+        console.error('[TRANSACTION ACTIONS] Erro ao deletar transação:', error);
+        alert('Erro ao excluir transação. Verifique o console para mais detalhes.');
+      }
+    } else {
+      console.log('[TRANSACTION ACTIONS] Confirmação cancelada');
     }
   }
 

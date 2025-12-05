@@ -72,14 +72,27 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
    */
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    console.log('[EDIT DIALOG] Iniciando submit do formulário...');
 
     // PROTEÇÃO: Se já está enviando, ignora novo clique
-    if (isSubmitting) return
+    if (isSubmitting) {
+      console.log('[EDIT DIALOG] Já está submetendo, ignorando...');
+      return;
+    }
 
     setIsSubmitting(true)
 
     try {
       const formData = new FormData(e.currentTarget)
+
+      console.log('[EDIT DIALOG] FormData criado:', {
+        id: formData.get('id'),
+        type: formData.get('type'),
+        description: formData.get('description'),
+        amount: formData.get('amount'),
+        category: formData.get('category'),
+        isFixed: formData.get('isFixed')
+      });
 
       /**
        * FIX IMPORTANTE: Garantia extra para o checkbox
@@ -91,11 +104,16 @@ export function EditTransactionDialog({ open, onOpenChange, transaction }: EditT
         formData.delete('isFixed');
       }
 
+      console.log('[EDIT DIALOG] Chamando updateTransaction...');
       // Envia atualização para Server Action
       await updateTransaction(formData);
 
+      console.log('[EDIT DIALOG] Atualização concluída com sucesso!');
       // Fecha o diálogo após sucesso
       onOpenChange(false);
+    } catch (error) {
+      console.error('[EDIT DIALOG] Erro ao atualizar transação:', error);
+      alert('Erro ao atualizar transação. Verifique o console para mais detalhes.');
     } finally {
       // IMPORTANTE: Sempre reseta isSubmitting
       setIsSubmitting(false)
